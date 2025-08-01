@@ -13,6 +13,7 @@ import (
 	"github.com/pranavmangal/grabotp/gmail"
 
 	"github.com/urfave/cli/v3"
+	"golang.design/x/clipboard"
 )
 
 var rootCmd = &cli.Command{
@@ -56,6 +57,13 @@ func fetchOTPs(ctx context.Context, cmd *cli.Command) error {
 
 	for _, otp := range otps {
 		fmt.Fprintln(w, otp.Sender+"\t"+timeAgo(otp.Timestamp)+"\t"+otp.OTP)
+	}
+
+	mostRecentOTP := otps[0].OTP
+
+	err := clipboard.Init()
+	if err == nil {
+		clipboard.Write(clipboard.FmtText, []byte(mostRecentOTP))
 	}
 
 	return nil
