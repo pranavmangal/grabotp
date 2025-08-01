@@ -12,6 +12,13 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
+
+	"github.com/zalando/go-keyring"
+)
+
+const (
+	keyringService = "grabotp"
+	keyringUser    = "gmail_token"
 )
 
 // GetClient retrieves a client to use the Gmail API
@@ -35,16 +42,12 @@ func GetClient() *gmail.Service {
 	return srv
 }
 
-// Retrieves a token, saves it, and returns the generated client.
+// Retrieves or fetches a token and returns the client.
 func getClient(config *oauth2.Config) *http.Client {
-	// The file token.json stores the user's access and refresh tokens, and is
-	// created automatically when the authorization flow completes for the first
-	// time.
-	tokFile := "token.json"
-	tok, err := tokenFromFile(tokFile)
+	tok, err := tokenFromKeyring()
 	if err != nil {
 		tok = getTokenFromWeb(config)
-		saveToken(tokFile, tok)
+		saveTokenToKeyring(tok)
 	}
 
 	return config.Client(context.Background(), tok)
@@ -68,31 +71,34 @@ func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
 	return tok
 }
 
-// Retrieves a token from a local file.
-func tokenFromFile(file string) (*oauth2.Token, error) {
-	f, err := os.Open(file)
+// Retrieves a token from the system keychain.
+func tokenFromKeyring() (*oauth2.Token, error) {
+	secret, err := keyring.Get(keyringService, keyringUser)
 	if err != nil {
 		return nil, err
 	}
 
-	defer f.Close()
-
 	tok := &oauth2.Token{}
-	err = json.NewDecoder(f).Decode(tok)
-
-	return tok, err
-}
-
-// Saves a token to a file path.
-func saveToken(path string, token *oauth2.Token) {
-	fmt.Printf("Saving credential file to: %s\n", path)
-
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	err = json.Unmarshal([]byte(secret), tok)
 	if err != nil {
-		log.Fatalf("Unable to cache oauth token: %v", err)
+		return nil, fmt.Errorf("Failed to unmarshal token from keychain: %w", err)
 	}
 
-	defer f.Close()
+	return tok, nil
+}
 
-	json.NewEncoder(f).Encode(token)
+// Saves a token to the system keychain.
+func saveTokenToKeyring(token *oauth2.Token) {
+	fmt.Println("Saving credential to system keychain...")
+	b, err := json.Marshal(token)
+	if err != nil {
+		log.Fatalf("Unable to marshal token to JSON: %v", err)
+	}
+
+	err = keyring.Set(keyringService, keyringUser, string(b))
+	if err != nil {
+		log.Fatalf("Unable to save token to keychain: %v", err)
+	}
+
+	fmt.Println("Successfully saved credential.")
 }
