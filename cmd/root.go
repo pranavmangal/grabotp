@@ -81,7 +81,8 @@ func timeAgo(t time.Time) string {
 	return fmt.Sprintf("%dm ago", minutes)
 }
 
-func Execute() {
+func Execute(version string) {
+	rootCmd.Version = version
 	if err := rootCmd.Run(context.Background(), os.Args); err != nil {
 		log.Fatal(err)
 	}
