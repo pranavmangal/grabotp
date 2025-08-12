@@ -13,20 +13,25 @@ import (
 	"google.golang.org/api/gmail/v1"
 )
 
+const (
+	fetchWindowMin = 10
+	maxResults     = 3
+)
+
 type ParsedOTP struct {
-	Sender    string
-	Timestamp time.Time
-	OTP       string
+	To        string    `json:"to"`
+	From      string    `json:"from"`
+	Timestamp time.Time `json:"timestamp"`
+	OTP       string    `json:"otp"`
 }
 
-func FetchOTPs() []ParsedOTP {
-	srv := GetClient()
+func FetchOTPs(user string) []ParsedOTP {
+	srv := GetGmailService(user)
 
-	user := "me"
-	halfHourAgo := time.Now().Add(-time.Minute * 30).Unix()
-	query := "after:" + strconv.FormatInt(halfHourAgo, 10)
+	timeAgo := time.Now().Add(-time.Minute * fetchWindowMin).Unix()
+	query := "after:" + strconv.FormatInt(timeAgo, 10)
 
-	r, err := srv.Users.Messages.List(user).Q(query).MaxResults(5).Do()
+	r, err := srv.Users.Messages.List(user).Q(query).MaxResults(maxResults).Do()
 	if err != nil {
 		log.Fatalf("Unable to retrieve messages: %v", err)
 	}
@@ -56,7 +61,7 @@ func FetchOTPs() []ParsedOTP {
 
 			otp := otp.Extract(body)
 			if len(otp) > 0 {
-				otpsChan <- ParsedOTP{Sender: sender, Timestamp: timestamp, OTP: otp}
+				otpsChan <- ParsedOTP{To: user, From: sender, Timestamp: timestamp, OTP: otp}
 			}
 		}(m.Id)
 	}
