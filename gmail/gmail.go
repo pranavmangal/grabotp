@@ -5,11 +5,13 @@ import (
 	"log"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/pranavmangal/grabotp/otp"
 
+	"golang.org/x/net/html"
 	"google.golang.org/api/gmail/v1"
 )
 
@@ -96,23 +98,74 @@ func getTimestamp(msg *gmail.Message) time.Time {
 }
 
 func getBody(msg *gmail.Message) string {
+	var parts []*gmail.MessagePart
 	if msg.Payload.Body.Data != "" {
-		decoded, err := base64.URLEncoding.DecodeString(msg.Payload.Body.Data)
-		if err == nil {
-			return string(decoded)
+		// Single-part email
+		parts = append(parts, &gmail.MessagePart{
+			MimeType: msg.Payload.MimeType,
+			Body:     msg.Payload.Body,
+		})
+	} else if len(msg.Payload.Parts) > 0 {
+		// Multipart email
+		parts = msg.Payload.Parts
+	}
+
+	for _, part := range parts {
+		if part.Body == nil || part.Body.Data == "" || isAttachment(part) {
+			continue
 		}
 
-	} else {
-		// Handle multipart emails
-		for _, part := range msg.Payload.Parts {
-			if part.MimeType == "text/plain" && part.Body != nil && part.Body.Data != "" {
-				decoded, err := base64.URLEncoding.DecodeString(part.Body.Data)
-				if err == nil {
-					return string(decoded)
-				}
+		switch part.MimeType {
+		case "text/plain":
+			if decoded, err := base64.URLEncoding.DecodeString(part.Body.Data); err == nil {
+				return string(decoded)
+			}
+		case "text/html":
+			if decoded, err := base64.URLEncoding.DecodeString(part.Body.Data); err == nil {
+				return parseHTMLText(string(decoded))
 			}
 		}
 	}
 
 	return ""
+}
+
+func isAttachment(part *gmail.MessagePart) bool {
+	for _, header := range part.Headers {
+		if header.Name == "Content-Disposition" {
+			return strings.Contains(header.Value, "attachment")
+		}
+	}
+
+	return false
+}
+
+func parseHTMLText(htmlContent string) string {
+	doc, err := html.Parse(strings.NewReader(htmlContent))
+	if err != nil {
+		return ""
+	}
+
+	var text strings.Builder
+	walkHTMLNodes(doc, &text)
+
+	return strings.TrimSpace(text.String())
+}
+
+func walkHTMLNodes(n *html.Node, text *strings.Builder) {
+	if n.Type == html.ElementNode && (n.Data == "script" || n.Data == "style") {
+		return
+	}
+
+	if n.Type == html.TextNode {
+		content := strings.TrimSpace(n.Data)
+		if content != "" {
+			text.WriteString(" ")
+			text.WriteString(content)
+		}
+	}
+
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		walkHTMLNodes(c, text)
+	}
 }
