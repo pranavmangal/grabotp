@@ -20,9 +20,10 @@ import (
 )
 
 var rootCmd = &cli.Command{
-	Name:   "grabotp",
-	Usage:  "A simple tool to fetch recent OTPs from your Gmail accounts.",
-	Action: fetchOTPs,
+	Name:                  "grabotp",
+	Usage:                 "A simple tool to fetch recent OTPs from your Gmail accounts.",
+	EnableShellCompletion: true,
+	Action:                fetchOTPs,
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
 			Name:  "json",

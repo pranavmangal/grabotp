@@ -10,6 +10,7 @@ version: 2
 before:
   hooks:
     - go mod tidy
+    - bash scripts/generate-completions.sh
 
 builds:
   - env:
@@ -40,6 +41,8 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
+    files:
+      - completions/*
 
 brews:
   - name: grabotp
@@ -48,6 +51,11 @@ brews:
     repository:
       owner: pranavmangal
       name: homebrew-tap
+    install: |
+      bin.install "grabotp"
+      bash_completion.install "completions/grabotp.bash" => "grabotp"
+      zsh_completion.install "completions/grabotp.zsh" => "_grabotp"
+      fish_completion.install "completions/grabotp.fish" => "grabotp.fish"
 
 changelog:
   sort: asc
